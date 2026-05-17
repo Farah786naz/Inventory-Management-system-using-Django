@@ -37,3 +37,14 @@ class InvoiceDetailSerializer(serializers.ModelSerializer):
             'sold_by_name', 'items'
         ]
         read_only_fields = ['__all__']
+
+from rest_framework import serializers
+
+class ForecastResultSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    current_stock = serializers.IntegerField()
+    predicted_30_day_demand = serializers.IntegerField()
+    daily_burn_rate = serializers.FloatField()
+    estimated_days_out = serializers.IntegerField()
+    recommended_reorder_quantity = serializers.IntegerField()
