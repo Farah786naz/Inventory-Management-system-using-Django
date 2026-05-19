@@ -25,7 +25,7 @@ class SaleViewSet(mixins.CreateModelMixin,
     """
     queryset = Sale.objects.all().order_by('-created_at')
     serializer_class = SaleSerializer
-    permission_classes = [IsAdminUser | IsManagerUser | IsStaffUser]
+    #permission_classes = [IsAdminUser | IsManagerUser | IsStaffUser]
     
 
 class CustomerViewSet(SoftDeleteModelMixin, viewsets.ModelViewSet):

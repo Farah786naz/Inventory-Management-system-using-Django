@@ -52,4 +52,17 @@ class ProductViewSet(viewsets.ModelViewSet):
             stock_quantity__lte=models.F('low_stock_threshold')
         )
         serializer = self.get_serializer(low_stock_items, many=True)
+        def get_permissions(self):
+        # 1. Deleting a product requires Admin
+            if self.action == 'destroy':
+                permission_classes = [IsAdminUser]
+            # 2. Creating or updating requires Admin OR Manager
+            elif self.action in ['create', 'update', 'partial_update']:
+                permission_classes = [IsAdminUser | IsManagerUser]
+            # 3. Viewing the product catalog is open to all authenticated roles
+            else:
+                permission_classes = [IsAdminUser | IsManagerUser | IsStaffUser]
+                
+            return [permission() for permission in permission_classes]
         return Response(serializer.data)
+    

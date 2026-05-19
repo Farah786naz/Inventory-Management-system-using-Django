@@ -11,9 +11,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Sum
 from django.utils import timezone
-import pandas as pd
-import numpy as np
 import datetime
+import math
 
 from sales.models import SaleItem
 from products.models import Product
@@ -77,28 +76,38 @@ class ProductForecastView(APIView):
         if not sales_data or len(sales_data) < 5:
             return Response(self._generate_fallback_data(product), status=status.HTTP_200_OK)
 
-        # 3. Convert Django QuerySet into a Pandas DataFrame
-        df = pd.DataFrame(list(sales_data))
-        df.columns = ['date', 'quantity']
-        df['date'] = pd.to_datetime(df['date'])
-        
-        # Fill missing days with 0 sales
-        idx = pd.date_range(df['date'].min(), datetime.date.today())
-        df = df.set_index('date').reindex(idx, fill_value=0).reset_index()
-        df.columns = ['date', 'quantity']
+        # 3. Build a daily sales series without relying on pandas.
+        sales_by_date = {
+            row['sale__created_at__date']: row['total_qty'] or 0
+            for row in sales_data
+        }
+        start_date = min(sales_by_date)
+        end_date = datetime.date.today()
+        daily_quantities = []
+        current_day = start_date
+        while current_day <= end_date:
+            daily_quantities.append(sales_by_date.get(current_day, 0))
+            current_day += datetime.timedelta(days=1)
 
-        # 4. Run Forecasting Metrics
-        df['ema_sales'] = df['quantity'].ewm(span=14, adjust=False).mean()
-        daily_burn_rate = float(df['ema_sales'].iloc[-1])
+        # 4. Run forecasting metrics using an exponential moving average.
+        ema_sales = []
+        smoothing_factor = 2 / (14 + 1)
+        for quantity in daily_quantities:
+            if not ema_sales:
+                ema_sales.append(float(quantity))
+            else:
+                ema_sales.append((quantity * smoothing_factor) + (ema_sales[-1] * (1 - smoothing_factor)))
+
+        daily_burn_rate = float(ema_sales[-1])
         
         if daily_burn_rate <= 0:
             daily_burn_rate = 0.01 
 
-        predicted_30_day_demand = int(np.ceil(daily_burn_rate * 30))
+        predicted_30_day_demand = int(math.ceil(daily_burn_rate * 30))
         
         # 5. Calculate Days Remaining until stock hits zero
         current_stock = product.stock_quantity
-        estimated_days_out = int(np.floor(current_stock / daily_burn_rate))
+        estimated_days_out = int(math.floor(current_stock / daily_burn_rate))
         recommended_reorder = max(0, predicted_30_day_demand - current_stock)
 
         forecast_payload = {
